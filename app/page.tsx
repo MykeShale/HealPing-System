@@ -1,7 +1,7 @@
-import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Heart, Calendar, Bell, Users, BarChart3, Shield } from "lucide-react"
+import { Heart, Shield, Users, Calendar, Bell, BarChart3 } from "lucide-react"
+import Link from "next/link"
 
 export default function HomePage() {
   return (
@@ -9,8 +9,8 @@ export default function HomePage() {
       {/* Header */}
       <header className="container mx-auto px-4 py-6">
         <nav className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="flex items-center justify-center w-10 h-10 bg-gradient-to-r from-blue-500 to-green-500 rounded-lg">
+          <div className="flex items-center space-x-2">
+            <div className="flex items-center justify-center w-10 h-10 bg-gradient-to-r from-blue-500 to-green-500 rounded-xl">
               <Heart className="w-6 h-6 text-white" />
             </div>
             <span className="text-2xl font-bold text-gray-900 dark:text-white">HealPing</span>
@@ -31,24 +31,24 @@ export default function HomePage() {
         <div className="max-w-4xl mx-auto">
           <h1 className="text-5xl md:text-6xl font-bold text-gray-900 dark:text-white mb-6">
             Smart Healthcare
-            <span className="bg-gradient-to-r from-blue-600 to-green-600 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-blue-500 to-green-500 bg-clip-text text-transparent">
               {" "}
               Follow-up System
             </span>
           </h1>
-          <p className="text-xl text-gray-600 dark:text-gray-400 mb-8 max-w-2xl mx-auto">
-            Revolutionize your medical practice with intelligent patient follow-ups, automated reminders, and
-            comprehensive care management.
+          <p className="text-xl text-gray-600 dark:text-gray-300 mb-8 max-w-2xl mx-auto">
+            Streamline patient care with automated reminders, intelligent follow-ups, and comprehensive health tracking.
+            Never miss a patient interaction again.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/auth/register">
-              <Button size="lg" className="w-full sm:w-auto">
+              <Button size="lg" className="text-lg px-8 py-3">
                 Start Free Trial
               </Button>
             </Link>
-            <Link href="/demo">
-              <Button variant="outline" size="lg" className="w-full sm:w-auto">
-                Watch Demo
+            <Link href="/auth/login">
+              <Button variant="outline" size="lg" className="text-lg px-8 py-3">
+                Sign In
               </Button>
             </Link>
           </div>
@@ -59,84 +59,108 @@ export default function HomePage() {
       <section className="container mx-auto px-4 py-20">
         <div className="text-center mb-16">
           <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
-            Everything you need for better patient care
+            Everything you need for patient care
           </h2>
-          <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-            Streamline your practice with our comprehensive suite of healthcare management tools
+          <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
+            Comprehensive tools designed to enhance patient relationships and improve health outcomes.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {[
-            {
-              icon: Users,
-              title: "Patient Management",
-              description: "Comprehensive patient profiles with medical history, preferences, and communication logs.",
-            },
-            {
-              icon: Calendar,
-              title: "Smart Scheduling",
-              description: "AI-powered appointment scheduling with conflict detection and optimal time suggestions.",
-            },
-            {
-              icon: Bell,
-              title: "Multi-Channel Reminders",
-              description: "Automated SMS, email, and WhatsApp reminders with delivery confirmations.",
-            },
-            {
-              icon: BarChart3,
-              title: "Analytics Dashboard",
-              description: "Real-time insights into patient engagement, follow-up rates, and practice performance.",
-            },
-            {
-              icon: Shield,
-              title: "HIPAA Compliant",
-              description: "Enterprise-grade security with end-to-end encryption and compliance standards.",
-            },
-            {
-              icon: Heart,
-              title: "Care Coordination",
-              description: "Seamless communication between healthcare providers and patients.",
-            },
-          ].map((feature, index) => (
-            <Card key={index} className="glass-card hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-green-500 rounded-lg flex items-center justify-center mb-4">
-                  <feature.icon className="w-6 h-6 text-white" />
-                </div>
-                <CardTitle>{feature.title}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CardDescription>{feature.description}</CardDescription>
-              </CardContent>
-            </Card>
-          ))}
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <Card className="glass-card">
+            <CardHeader>
+              <Users className="w-12 h-12 text-blue-500 mb-4" />
+              <CardTitle>Patient Management</CardTitle>
+              <CardDescription>
+                Comprehensive patient profiles with medical history, contact information, and treatment plans.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+
+          <Card className="glass-card">
+            <CardHeader>
+              <Calendar className="w-12 h-12 text-green-500 mb-4" />
+              <CardTitle>Smart Scheduling</CardTitle>
+              <CardDescription>
+                Intelligent appointment scheduling with automated reminders and conflict detection.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+
+          <Card className="glass-card">
+            <CardHeader>
+              <Bell className="w-12 h-12 text-purple-500 mb-4" />
+              <CardTitle>Automated Reminders</CardTitle>
+              <CardDescription>
+                Customizable reminder system for appointments, medications, and follow-up care.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+
+          <Card className="glass-card">
+            <CardHeader>
+              <BarChart3 className="w-12 h-12 text-orange-500 mb-4" />
+              <CardTitle>Analytics Dashboard</CardTitle>
+              <CardDescription>
+                Comprehensive insights into patient care patterns and clinic performance metrics.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+
+          <Card className="glass-card">
+            <CardHeader>
+              <Shield className="w-12 h-12 text-red-500 mb-4" />
+              <CardTitle>HIPAA Compliant</CardTitle>
+              <CardDescription>
+                Enterprise-grade security ensuring patient data privacy and regulatory compliance.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+
+          <Card className="glass-card">
+            <CardHeader>
+              <Heart className="w-12 h-12 text-pink-500 mb-4" />
+              <CardTitle>Care Coordination</CardTitle>
+              <CardDescription>
+                Seamless communication between healthcare providers and patients for better outcomes.
+              </CardDescription>
+            </CardHeader>
+          </Card>
         </div>
       </section>
 
       {/* CTA Section */}
       <section className="container mx-auto px-4 py-20">
-        <div className="bg-gradient-to-r from-blue-600 to-green-600 rounded-2xl p-12 text-center text-white">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">Ready to transform your practice?</h2>
-          <p className="text-xl mb-8 opacity-90">Join thousands of healthcare providers who trust HealPing</p>
-          <Link href="/auth/register">
-            <Button size="lg" variant="secondary">
-              Get Started Today
-            </Button>
-          </Link>
-        </div>
+        <Card className="glass-card text-center">
+          <CardHeader>
+            <CardTitle className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
+              Ready to transform your practice?
+            </CardTitle>
+            <CardDescription className="text-xl mb-8">
+              Join thousands of healthcare providers using HealPing to deliver exceptional patient care.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link href="/auth/register">
+                <Button size="lg" className="text-lg px-8 py-3">
+                  Get Started Today
+                </Button>
+              </Link>
+              <Link href="/auth/login">
+                <Button variant="outline" size="lg" className="text-lg px-8 py-3">
+                  Sign In
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
       </section>
 
       {/* Footer */}
       <footer className="container mx-auto px-4 py-8 border-t border-gray-200 dark:border-gray-700">
-        <div className="flex flex-col md:flex-row justify-between items-center">
-          <div className="flex items-center space-x-3 mb-4 md:mb-0">
-            <div className="flex items-center justify-center w-8 h-8 bg-gradient-to-r from-blue-500 to-green-500 rounded-lg">
-              <Heart className="w-4 h-4 text-white" />
-            </div>
-            <span className="text-lg font-semibold text-gray-900 dark:text-white">HealPing</span>
-          </div>
-          <p className="text-gray-600 dark:text-gray-400">© 2024 HealPing. All rights reserved.</p>
+        <div className="text-center text-gray-600 dark:text-gray-400">
+          <p>&copy; 2024 HealPing. All rights reserved.</p>
         </div>
       </footer>
     </div>
