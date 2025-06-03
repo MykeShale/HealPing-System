@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { supabase } from "@/lib/supabase"
+import { createSupabaseClient } from "@/lib/supabase"
 import type { Appointment } from "@/types"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -17,6 +17,7 @@ export function UpcomingAppointments() {
 
   const fetchAppointments = async () => {
     try {
+      const supabase = createSupabaseClient()
       const {
         data: { user },
       } = await supabase.auth.getUser()
@@ -43,12 +44,6 @@ export function UpcomingAppointments() {
     } catch (error) {
       console.error("Error fetching appointments:", error)
     }
-  }
-
-  const refreshAppointments = async () => {
-    setLoading(true)
-    await fetchAppointments()
-    setLoading(false)
   }
 
   useEffect(() => {
@@ -103,7 +98,8 @@ export function UpcomingAppointments() {
             {appointments.map((appointment) => (
               <div
                 key={appointment.id}
-                className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+                onClick={() => router.push(`/dashboard/appointments/${appointment.id}`)}
               >
                 <div className="flex items-center space-x-4">
                   <div className="flex-shrink-0">
@@ -129,9 +125,6 @@ export function UpcomingAppointments() {
                 <div className="flex items-center space-x-2">
                   <Button variant="ghost" size="sm">
                     <Phone className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="sm">
-                    View
                   </Button>
                 </div>
               </div>

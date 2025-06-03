@@ -3,7 +3,7 @@
 import type React from "react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabase"
+import { createSupabaseClient } from "@/lib/supabase"
 import type { Patient } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -75,6 +75,7 @@ export function PatientForm({ patient, isEditing = false }: PatientFormProps) {
     setLoading(true)
 
     try {
+      const supabase = createSupabaseClient()
       const {
         data: { user },
         error: userError,

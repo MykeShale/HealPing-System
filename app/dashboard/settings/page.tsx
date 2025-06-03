@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { supabase } from "@/lib/supabase"
+import { createSupabaseClient } from "@/lib/supabase"
 import type { Profile, Clinic } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -48,6 +48,7 @@ export default function SettingsPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        const supabase = createSupabaseClient()
         const {
           data: { user },
         } = await supabase.auth.getUser()
@@ -108,6 +109,7 @@ export default function SettingsPage() {
   const saveProfile = async () => {
     setSaving(true)
     try {
+      const supabase = createSupabaseClient()
       const {
         data: { user },
       } = await supabase.auth.getUser()
@@ -145,6 +147,7 @@ export default function SettingsPage() {
     try {
       if (!clinic) return
 
+      const supabase = createSupabaseClient()
       const { error } = await supabase
         .from("clinics")
         .update({

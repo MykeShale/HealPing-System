@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabase"
+import { createSupabaseClient } from "@/lib/supabase"
 import type { Profile } from "@/types"
 import { Button } from "@/components/ui/button"
 import {
@@ -29,6 +29,7 @@ export function Header({ profile }: HeaderProps) {
 
   const handleSignOut = async () => {
     try {
+      const supabase = createSupabaseClient()
       await supabase.auth.signOut()
       router.push("/auth/login")
     } catch (error) {

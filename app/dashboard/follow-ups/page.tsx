@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabase"
+import { createSupabaseClient } from "@/lib/supabase"
 import type { Appointment } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Search, Clock, Calendar, User, Phone, Eye, Bell } from "lucide-react"
 import { format, isBefore, addDays } from "date-fns"
 import Link from "next/link"
+import { useToast } from "@/hooks/use-toast"
 
 export default function FollowUpsPage() {
   const [followUps, setFollowUps] = useState<Appointment[]>([])
@@ -19,10 +20,12 @@ export default function FollowUpsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [loading, setLoading] = useState(true)
   const router = useRouter()
+  const { toast } = useToast()
 
   useEffect(() => {
     const fetchFollowUps = async () => {
       try {
+        const supabase = createSupabaseClient()
         const {
           data: { user },
         } = await supabase.auth.getUser()
@@ -81,12 +84,30 @@ export default function FollowUpsPage() {
 
   const sendReminder = async (appointmentId: string) => {
     try {
-      // This would integrate with your notification service
-      // For now, we'll just show a success message
-      console.log("Sending reminder for appointment:", appointmentId)
-      // You would implement the actual reminder sending logic here
+      const supabase = createSupabaseClient()
+
+      // Create a reminder for this follow-up
+      const { error } = await supabase.from("reminders").insert({
+        appointment_id: appointmentId,
+        reminder_type: "sms",
+        scheduled_for: new Date().toISOString(),
+        message_content: "This is a reminder for your upcoming follow-up appointment.",
+        status: "pending",
+      })
+
+      if (error) throw error
+
+      toast({
+        title: "Success",
+        description: "Reminder sent successfully",
+      })
     } catch (error) {
       console.error("Error sending reminder:", error)
+      toast({
+        title: "Error",
+        description: "Failed to send reminder",
+        variant: "destructive",
+      })
     }
   }
 

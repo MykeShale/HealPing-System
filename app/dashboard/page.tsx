@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { supabase } from "@/lib/supabase"
+import { createSupabaseClient } from "@/lib/supabase"
 import type { DashboardStats } from "@/types"
 import { StatsCards } from "@/components/dashboard/stats-cards"
 import { UpcomingAppointments } from "@/components/dashboard/upcoming-appointments"
@@ -17,6 +17,8 @@ export default function DashboardPage() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true)
+
+      const supabase = createSupabaseClient()
 
       // Get current user
       const {

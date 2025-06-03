@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabase"
+import { createSupabaseClient } from "@/lib/supabase"
 import type { Reminder } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -25,6 +25,7 @@ export default function RemindersPage() {
   useEffect(() => {
     const fetchReminders = async () => {
       try {
+        const supabase = createSupabaseClient()
         const {
           data: { user },
         } = await supabase.auth.getUser()
