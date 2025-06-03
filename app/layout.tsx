@@ -2,14 +2,14 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
-import { ThemeProvider } from "@/components/theme-provider"
+import { AuthProvider } from "@/lib/auth-context"
 import { Toaster } from "@/components/ui/toaster"
 
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "HealPing - Smart Healthcare Follow-up System",
-  description: "Revolutionizing medical practice management with intelligent follow-up reminders",
+  title: "HealPing - Healthcare Follow-up System",
+  description: "Comprehensive healthcare follow-up reminder system",
     generator: 'v0.dev'
 }
 
@@ -19,12 +19,12 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en">
       <body className={inter.className}>
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
+        <AuthProvider>
           {children}
           <Toaster />
-        </ThemeProvider>
+        </AuthProvider>
       </body>
     </html>
   )
