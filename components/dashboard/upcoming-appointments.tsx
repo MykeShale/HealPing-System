@@ -6,55 +6,61 @@ import type { Appointment } from "@/types"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, Clock, User, Phone } from "lucide-react"
-import { format } from "date-fns"
-import { useRouter } from "next/navigation"
+import { Calendar, Clock, Eye } from "lucide-react"
+import { format, isToday, isTomorrow } from "date-fns"
+import Link from "next/link"
 
 export function UpcomingAppointments() {
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [loading, setLoading] = useState(true)
-  const router = useRouter()
 
-  const fetchAppointments = async () => {
-    try {
-      const supabase = createSupabaseClient()
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (!user) return
+  useEffect(() => {
+    const fetchUpcomingAppointments = async () => {
+      try {
+        const supabase = createSupabaseClient()
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
+        if (!user) return
 
-      const { data: profile } = await supabase.from("profiles").select("clinic_id").eq("id", user.id).single()
+        const { data: profile } = await supabase.from("profiles").select("clinic_id").eq("id", user.id).single()
+        if (!profile?.clinic_id) return
 
-      if (!profile?.clinic_id) return
+        const today = new Date()
+        const nextWeek = new Date(today)
+        nextWeek.setDate(today.getDate() + 7)
 
-      const { data: appointments } = await supabase
-        .from("appointments")
-        .select(`
+        const { data: appointments } = await supabase
+          .from("appointments")
+          .select(`
             *,
             patient:patients(full_name, phone),
             doctor:profiles!appointments_doctor_id_fkey(full_name)
           `)
-        .eq("clinic_id", profile.clinic_id)
-        .gte("appointment_date", new Date().toISOString())
-        .eq("status", "scheduled")
-        .order("appointment_date", { ascending: true })
-        .limit(5)
+          .eq("clinic_id", profile.clinic_id)
+          .eq("status", "scheduled")
+          .gte("appointment_date", today.toISOString())
+          .lte("appointment_date", nextWeek.toISOString())
+          .order("appointment_date", { ascending: true })
+          .limit(5)
 
-      setAppointments(appointments || [])
-    } catch (error) {
-      console.error("Error fetching appointments:", error)
-    }
-  }
-
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true)
-      await fetchAppointments()
-      setLoading(false)
+        setAppointments(appointments || [])
+      } catch (error) {
+        console.error("Error fetching upcoming appointments:", error)
+      } finally {
+        setLoading(false)
+      }
     }
 
-    fetchData()
+    fetchUpcomingAppointments()
   }, [])
+
+  const getDateLabel = (date: string) => {
+    const appointmentDate = new Date(date)
+    if (isToday(appointmentDate)) return "Today"
+    if (isTomorrow(appointmentDate)) return "Tomorrow"
+    return format(appointmentDate, "MMM dd")
+  }
 
   if (loading) {
     return (
@@ -65,10 +71,7 @@ export function UpcomingAppointments() {
         <CardContent>
           <div className="space-y-4">
             {[...Array(3)].map((_, i) => (
-              <div key={i} className="animate-pulse">
-                <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-                <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-              </div>
+              <div key={i} className="h-16 bg-gray-200 rounded animate-pulse"></div>
             ))}
           </div>
         </CardContent>
@@ -78,57 +81,52 @@ export function UpcomingAppointments() {
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="flex items-center">
-          <Calendar className="h-5 w-5 mr-2 text-blue-600" />
-          Upcoming Appointments
-        </CardTitle>
-        <Button variant="outline" size="sm" onClick={() => router.push("/dashboard/appointments")}>
-          View All
-        </Button>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-base font-medium">Upcoming Appointments</CardTitle>
+        <Calendar className="h-4 w-4 text-muted-foreground" />
       </CardHeader>
       <CardContent>
         {appointments.length === 0 ? (
-          <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-            <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p>No upcoming appointments</p>
+          <div className="text-center py-6">
+            <Calendar className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+            <p className="text-gray-600 dark:text-gray-400">No upcoming appointments</p>
           </div>
         ) : (
           <div className="space-y-4">
             {appointments.map((appointment) => (
-              <div
-                key={appointment.id}
-                className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
-                onClick={() => router.push(`/dashboard/appointments/${appointment.id}`)}
-              >
-                <div className="flex items-center space-x-4">
-                  <div className="flex-shrink-0">
-                    <div className="h-10 w-10 bg-gradient-to-r from-blue-500 to-green-500 rounded-full flex items-center justify-center">
-                      <User className="h-5 w-5 text-white" />
-                    </div>
+              <div key={appointment.id} className="flex items-center justify-between p-3 border rounded-lg">
+                <div className="flex items-center space-x-3">
+                  <div className="h-10 w-10 bg-gradient-to-r from-blue-500 to-green-500 rounded-full flex items-center justify-center">
+                    <span className="text-sm font-medium text-white">
+                      {appointment.patient?.full_name.charAt(0).toUpperCase()}
+                    </span>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">
-                      {appointment.patient?.full_name}
-                    </p>
-                    <div className="flex items-center space-x-2 text-xs text-gray-500 dark:text-gray-400">
-                      <Clock className="h-3 w-3" />
-                      <span>{format(new Date(appointment.appointment_date), "MMM dd, yyyy HH:mm")}</span>
-                      {appointment.treatment_type && (
-                        <Badge variant="secondary" className="text-xs">
-                          {appointment.treatment_type}
-                        </Badge>
-                      )}
+                    <p className="font-medium">{appointment.patient?.full_name}</p>
+                    <div className="flex items-center text-sm text-gray-500">
+                      <Clock className="h-3 w-3 mr-1" />
+                      {getDateLabel(appointment.appointment_date)} at{" "}
+                      {format(new Date(appointment.appointment_date), "HH:mm")}
                     </div>
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <Button variant="ghost" size="sm">
-                    <Phone className="h-4 w-4" />
+                  {appointment.treatment_type && (
+                    <Badge variant="outline" className="text-xs">
+                      {appointment.treatment_type}
+                    </Badge>
+                  )}
+                  <Button variant="ghost" size="sm" asChild>
+                    <Link href={`/dashboard/appointments/${appointment.id}`}>
+                      <Eye className="h-4 w-4" />
+                    </Link>
                   </Button>
                 </div>
               </div>
             ))}
+            <Button variant="outline" className="w-full" asChild>
+              <Link href="/dashboard/appointments">View All Appointments</Link>
+            </Button>
           </div>
         )}
       </CardContent>

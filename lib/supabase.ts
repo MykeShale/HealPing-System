@@ -13,9 +13,20 @@ export const isSupabaseConfigured = () => {
 // Safe client creation that won't break during build
 export const createSupabaseClient = () => {
   if (!supabaseUrl || !supabaseAnonKey) {
+    console.error("Supabase environment variables are missing:", {
+      url: !!supabaseUrl,
+      key: !!supabaseAnonKey,
+    })
     throw new Error("Supabase environment variables are not configured")
   }
-  return createClient(supabaseUrl, supabaseAnonKey)
+
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: true,
+    },
+  })
 }
 
 // Server-side client creation

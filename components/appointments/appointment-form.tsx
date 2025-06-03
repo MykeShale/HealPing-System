@@ -3,7 +3,7 @@
 import type React from "react"
 import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { supabase } from "@/lib/supabase"
+import { createSupabaseClient } from "@/lib/supabase"
 import type { Appointment, Patient, Profile } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -42,6 +42,7 @@ export function AppointmentForm({ appointment, isEditing = false }: AppointmentF
   useEffect(() => {
     const fetchData = async () => {
       try {
+        const supabase = createSupabaseClient()
         const {
           data: { user },
           error: userError,
@@ -169,6 +170,7 @@ export function AppointmentForm({ appointment, isEditing = false }: AppointmentF
     setLoading(true)
 
     try {
+      const supabase = createSupabaseClient()
       const {
         data: { user },
         error: userError,
