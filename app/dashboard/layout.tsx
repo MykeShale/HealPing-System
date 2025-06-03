@@ -3,7 +3,7 @@
 import type React from "react"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { createClientComponentClient } from "@/lib/supabase"
+import { createSupabaseClient } from "@/lib/supabase"
 import { Sidebar } from "@/components/dashboard/sidebar"
 import { Header } from "@/components/dashboard/header"
 import type { Profile } from "@/types"
@@ -22,14 +22,7 @@ export default function DashboardLayout({
   useEffect(() => {
     const getUser = async () => {
       try {
-        // Check if Supabase is properly configured
-        if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-          setError("Application is not properly configured.")
-          setLoading(false)
-          return
-        }
-
-        const supabase = createClientComponentClient()
+        const supabase = createSupabaseClient()
 
         const {
           data: { user },
@@ -57,7 +50,7 @@ export default function DashboardLayout({
         }
 
         setProfile(profile)
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error in dashboard layout:", error)
         setError("Failed to load dashboard. Please try again.")
       } finally {
@@ -67,9 +60,9 @@ export default function DashboardLayout({
 
     getUser()
 
-    // Only set up auth listener if Supabase is configured
-    if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-      const supabase = createClientComponentClient()
+    // Set up auth listener
+    try {
+      const supabase = createSupabaseClient()
       const {
         data: { subscription },
       } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -79,6 +72,8 @@ export default function DashboardLayout({
       })
 
       return () => subscription.unsubscribe()
+    } catch (error) {
+      console.error("Failed to set up auth listener:", error)
     }
   }, [router])
 
@@ -94,7 +89,7 @@ export default function DashboardLayout({
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-red-600 mb-4">Configuration Error</h1>
+          <h1 className="text-2xl font-bold text-red-600 mb-4">Error</h1>
           <p className="text-gray-600">{error}</p>
         </div>
       </div>
