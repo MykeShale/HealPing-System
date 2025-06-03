@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabase"
+import { createSupabaseClient } from "@/lib/supabase"
 import type { Appointment } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -28,6 +28,7 @@ export default function AppointmentsPage() {
     try {
       setLoading(true)
 
+      const supabase = createSupabaseClient()
       const {
         data: { user },
         error: userError,
