@@ -4,86 +4,59 @@ import { useEffect, useState } from "react"
 import { StatsCards } from "@/components/dashboard/stats-cards"
 import { UpcomingAppointments } from "@/components/dashboard/upcoming-appointments"
 import { RecentReminders } from "@/components/dashboard/recent-reminders"
-import { useSupabase } from "@/hooks/use-supabase"
+import { getConfigStatus } from "@/lib/config"
+import { createSupabaseClient } from "@/lib/supabase-client"
+import { demoData } from "@/lib/demo-data"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Info } from "lucide-react"
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState({
-    totalPatients: 0,
-    todayAppointments: 0,
-    pendingFollowUps: 0,
-    completionRate: 0,
-  })
+  const [stats, setStats] = useState(demoData.stats)
   const [loading, setLoading] = useState(true)
-  const { client, user, isConfigured } = useSupabase()
+  const configStatus = getConfigStatus()
 
   useEffect(() => {
     const fetchDashboardData = async () => {
-      if (!isConfigured || !client || !user) {
-        // Use mock data when not configured
-        setStats({
-          totalPatients: 125,
-          todayAppointments: 8,
-          pendingFollowUps: 12,
-          completionRate: 87,
-        })
-        setLoading(false)
-        return
-      }
-
       try {
-        // Try to fetch real data, but don't fail if it doesn't work
-        const { data: profile } = await client.from("profiles").select("clinic_id").eq("id", user.id).single()
-
-        if (profile?.clinic_id) {
-          const [patientsResult, appointmentsResult] = await Promise.all([
-            client.from("patients").select("id", { count: "exact" }).eq("clinic_id", profile.clinic_id),
-            client.from("appointments").select("id", { count: "exact" }).eq("clinic_id", profile.clinic_id),
-          ])
-
-          setStats({
-            totalPatients: patientsResult.count || 0,
-            todayAppointments: appointmentsResult.count || 0,
-            pendingFollowUps: 5, // Mock data
-            completionRate: 85, // Mock data
-          })
+        if (configStatus.mode === "demo") {
+          // Use demo data
+          setStats(demoData.stats)
         } else {
-          // Use mock data if no clinic found
-          setStats({
-            totalPatients: 125,
-            todayAppointments: 8,
-            pendingFollowUps: 12,
-            completionRate: 87,
-          })
+          // Try to fetch real data
+          const supabase = createSupabaseClient()
+          const {
+            data: { user },
+          } = await supabase.auth.getUser()
+
+          if (user) {
+            const { data: profile } = await supabase.from("profiles").select("clinic_id").eq("id", user.id).single()
+
+            if (profile?.clinic_id) {
+              const [patientsResult, appointmentsResult] = await Promise.all([
+                supabase.from("patients").select("id", { count: "exact" }).eq("clinic_id", profile.clinic_id),
+                supabase.from("appointments").select("id", { count: "exact" }).eq("clinic_id", profile.clinic_id),
+              ])
+
+              setStats({
+                totalPatients: patientsResult.count || 0,
+                todayAppointments: appointmentsResult.count || 0,
+                pendingFollowUps: 5,
+                completionRate: 85,
+              })
+            }
+          }
         }
       } catch (error) {
         console.error("Error fetching dashboard data:", error)
-        // Use mock data on error
-        setStats({
-          totalPatients: 125,
-          todayAppointments: 8,
-          pendingFollowUps: 12,
-          completionRate: 87,
-        })
+        // Fallback to demo data
+        setStats(demoData.stats)
       } finally {
         setLoading(false)
       }
     }
 
     fetchDashboardData()
-  }, [client, user, isConfigured])
-
-  if (!isConfigured) {
-    return (
-      <div className="p-4">
-        <Alert variant="destructive">
-          <AlertDescription>
-            The application is not properly configured. Please contact your administrator.
-          </AlertDescription>
-        </Alert>
-      </div>
-    )
-  }
+  }, [configStatus.mode])
 
   if (loading) {
     return (
@@ -92,11 +65,6 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           {[...Array(4)].map((_, i) => (
             <div key={i} className="h-32 bg-gray-200 rounded animate-pulse"></div>
-          ))}
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {[...Array(2)].map((_, i) => (
-            <div key={i} className="h-96 bg-gray-200 rounded animate-pulse"></div>
           ))}
         </div>
       </div>
@@ -110,12 +78,17 @@ export default function DashboardPage() {
         <p className="text-gray-600 dark:text-gray-400">
           Welcome back! Here's what's happening with your practice today.
         </p>
-        {!isConfigured && (
-          <Alert className="mt-4">
-            <AlertDescription>Running in demo mode. Connect your database to see real data.</AlertDescription>
-          </Alert>
-        )}
       </div>
+
+      {configStatus.mode === "demo" && (
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertDescription>
+            <strong>Demo Mode:</strong> You're viewing sample data. Connect your Supabase database to see real patient
+            information.
+          </AlertDescription>
+        </Alert>
+      )}
 
       <StatsCards stats={stats} />
 
