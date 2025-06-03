@@ -1,63 +1,92 @@
-import { createClient } from "@supabase/supabase-js"
+import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 
-// Get environment variables
+// Environment variables with fallbacks
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ""
+
+// Global client instance
+let supabaseClient: SupabaseClient | null = null
+
+// Check if we're in a browser environment
+const isBrowser = typeof window !== "undefined"
 
 // Helper to check if Supabase is configured
-export const isSupabaseConfigured = () => {
-  return !!(supabaseUrl && supabaseAnonKey)
+export const isSupabaseConfigured = (): boolean => {
+  return Boolean(supabaseUrl && supabaseAnonKey && supabaseUrl.startsWith("https://"))
 }
 
-// Safe client creation that won't break during build
-export const createSupabaseClient = () => {
-  if (!supabaseUrl || !supabaseAnonKey) {
-    console.error("Supabase environment variables are missing")
-    throw new Error("Supabase environment variables are not configured")
+// Safe client creation that never throws during build
+export const createSupabaseClient = (): SupabaseClient => {
+  // If we already have a client, return it
+  if (supabaseClient) {
+    return supabaseClient
+  }
+
+  // Check if Supabase is properly configured
+  if (!isSupabaseConfigured()) {
+    // Return a mock client for build time or when not configured
+    return createMockClient()
   }
 
   try {
-    return createClient(supabaseUrl, supabaseAnonKey, {
+    supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
-        autoRefreshToken: true,
-        persistSession: true,
-        detectSessionInUrl: true,
+        autoRefreshToken: isBrowser,
+        persistSession: isBrowser,
+        detectSessionInUrl: isBrowser,
+      },
+      global: {
+        headers: {
+          "X-Client-Info": "healping-app",
+        },
       },
     })
+
+    return supabaseClient
   } catch (error) {
-    console.error("Error creating Supabase client:", error)
-    throw new Error("Failed to create Supabase client")
+    console.error("Failed to create Supabase client:", error)
+    return createMockClient()
   }
 }
 
-// Server-side client creation
-export const createServerSupabaseClient = () => {
-  if (!supabaseUrl || !supabaseServiceRoleKey) {
-    throw new Error("Supabase server environment variables are not configured")
-  }
+// Create a mock client for when Supabase is not available
+function createMockClient(): SupabaseClient {
+  const mockClient = {
+    auth: {
+      getUser: async () => ({ data: { user: null }, error: new Error("Supabase not configured") }),
+      signInWithPassword: async () => ({
+        data: { user: null, session: null },
+        error: new Error("Supabase not configured"),
+      }),
+      signUp: async () => ({ data: { user: null, session: null }, error: new Error("Supabase not configured") }),
+      signOut: async () => ({ error: null }),
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+    },
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          single: async () => ({ data: null, error: new Error("Supabase not configured") }),
+          order: () => ({
+            limit: async () => ({ data: [], error: new Error("Supabase not configured") }),
+          }),
+        }),
+        order: () => ({
+          limit: async () => ({ data: [], error: new Error("Supabase not configured") }),
+        }),
+      }),
+      insert: async () => ({ data: null, error: new Error("Supabase not configured") }),
+      update: async () => ({ data: null, error: new Error("Supabase not configured") }),
+      delete: async () => ({ data: null, error: new Error("Supabase not configured") }),
+    }),
+  } as any
 
-  try {
-    return createClient(supabaseUrl, supabaseServiceRoleKey)
-  } catch (error) {
-    console.error("Error creating server Supabase client:", error)
-    throw new Error("Failed to create server Supabase client")
-  }
+  return mockClient
 }
 
-// Default export for backward compatibility (only created when needed)
-let defaultClient: ReturnType<typeof createClient> | null = null
-
-export const getSupabaseClient = () => {
-  if (!defaultClient && isSupabaseConfigured()) {
-    try {
-      defaultClient = createSupabaseClient()
-    } catch (error) {
-      console.error("Failed to create default Supabase client:", error)
-    }
-  }
-  return defaultClient
+// Get the singleton client instance
+export const getSupabaseClient = (): SupabaseClient => {
+  return createSupabaseClient()
 }
 
-// Export for backward compatibility
+// Default export
 export const supabase = getSupabaseClient()

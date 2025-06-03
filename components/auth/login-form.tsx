@@ -1,121 +1,141 @@
 "use client"
 
+import type React from "react"
+
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm } from "react-hook-form"
-import * as z from "zod"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { createSupabaseClient } from "@/lib/supabase"
-import { isSupabaseConfigured } from "@/lib/env"
-
-const formSchema = z.object({
-  email: z.string().email({ message: "Please enter a valid email address" }),
-  password: z.string().min(6, { message: "Password must be at least 6 characters" }),
-})
+import { Eye, EyeOff, Loader2 } from "lucide-react"
+import { useSupabase } from "@/hooks/use-supabase"
+import Link from "next/link"
 
 export function LoginForm() {
-  const router = useRouter()
-  const [isLoading, setIsLoading] = useState(false)
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const router = useRouter()
+  const { client, isConfigured } = useSupabase()
 
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      email: "",
-      password: "",
-    },
-  })
-
-  async function onSubmit(values: z.infer<typeof formSchema>) {
-    setIsLoading(true)
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
     setError(null)
 
     try {
-      if (!isSupabaseConfigured()) {
-        throw new Error("Supabase is not configured. Please check your environment variables.")
+      if (!isConfigured) {
+        throw new Error("Application is not properly configured. Please contact support.")
       }
 
-      const supabase = createSupabaseClient()
+      if (!client) {
+        throw new Error("Unable to connect to authentication service.")
+      }
 
-      const { error } = await supabase.auth.signInWithPassword({
-        email: values.email,
-        password: values.password,
+      if (!email.trim() || !password.trim()) {
+        throw new Error("Please enter both email and password.")
+      }
+
+      const { data, error: authError } = await client.auth.signInWithPassword({
+        email: email.trim(),
+        password: password.trim(),
       })
 
-      if (error) {
-        console.error("Login error:", error)
-        throw new Error(error.message || "Failed to sign in. Please check your credentials.")
+      if (authError) {
+        if (authError.message === "Supabase not configured") {
+          throw new Error("Application is not properly configured. Please contact support.")
+        }
+        throw new Error(authError.message || "Login failed. Please check your credentials.")
       }
 
-      router.push("/dashboard")
-      router.refresh()
-    } catch (err: any) {
-      console.error("Login submission error:", err)
-      setError(err.message || "An unexpected error occurred. Please try again.")
+      if (data.user) {
+        router.push("/dashboard")
+        router.refresh()
+      }
+    } catch (error: any) {
+      console.error("Login error:", error)
+      setError(error.message || "An unexpected error occurred. Please try again.")
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
   }
 
+  if (!isConfigured) {
+    return (
+      <div className="max-w-md mx-auto mt-8">
+        <Alert variant="destructive">
+          <AlertDescription>
+            The application is not properly configured. Please contact your administrator.
+          </AlertDescription>
+        </Alert>
+      </div>
+    )
+  }
+
   return (
-    <Card className="w-full max-w-md">
-      <CardHeader>
-        <CardTitle className="text-2xl">Login</CardTitle>
-        <CardDescription>Enter your email and password to access your account</CardDescription>
-      </CardHeader>
-      <CardContent>
+    <div className="max-w-md mx-auto mt-8 p-6 bg-white dark:bg-gray-800 rounded-lg shadow-md">
+      <h2 className="text-2xl font-bold mb-6 text-center">Sign In</h2>
+
+      <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
-          <Alert variant="destructive" className="mb-4">
+          <Alert variant="destructive">
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Email</FormLabel>
-                  <FormControl>
-                    <Input placeholder="doctor@example.com" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+
+        <div className="space-y-2">
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
+            type="email"
+            placeholder="doctor@clinic.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            disabled={loading}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="password">Password</Label>
+          <div className="relative">
+            <Input
+              id="password"
+              type={showPassword ? "text" : "password"}
+              placeholder="Enter your password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              disabled={loading}
             />
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Password</FormLabel>
-                  <FormControl>
-                    <Input type="password" placeholder="••••••••" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? "Signing in..." : "Sign In"}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+              onClick={() => setShowPassword(!showPassword)}
+              disabled={loading}
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </Button>
-          </form>
-        </Form>
-      </CardContent>
-      <CardFooter className="flex justify-center">
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          Don&apos;t have an account?{" "}
-          <Button variant="link" className="p-0" onClick={() => router.push("/auth/register")}>
-            Register
-          </Button>
-        </p>
-      </CardFooter>
-    </Card>
+          </div>
+        </div>
+
+        <Button type="submit" className="w-full" disabled={loading}>
+          {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Sign In
+        </Button>
+
+        <div className="text-center text-sm">
+          <span className="text-gray-600 dark:text-gray-400">Don't have an account? </span>
+          <Link href="/auth/register" className="text-blue-600 hover:text-blue-500 font-medium">
+            Sign up
+          </Link>
+        </div>
+      </form>
+    </div>
   )
 }
