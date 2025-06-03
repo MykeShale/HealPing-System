@@ -1,176 +1,261 @@
 "use client"
 
+import type React from "react"
+
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm } from "react-hook-form"
-import * as z from "zod"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { createSupabaseClient } from "@/lib/supabase"
-import { isSupabaseConfigured } from "@/lib/env"
-
-const formSchema = z
-  .object({
-    name: z.string().min(2, { message: "Name must be at least 2 characters" }),
-    email: z.string().email({ message: "Please enter a valid email address" }),
-    password: z.string().min(6, { message: "Password must be at least 6 characters" }),
-    confirmPassword: z.string(),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords do not match",
-    path: ["confirmPassword"],
-  })
+import { Eye, EyeOff, Loader2 } from "lucide-react"
+import { useSupabase } from "@/hooks/use-supabase"
+import Link from "next/link"
 
 export function RegisterForm() {
-  const router = useRouter()
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      name: "",
-      email: "",
-      password: "",
-      confirmPassword: "",
-    },
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+    confirmPassword: "",
+    fullName: "",
+    phone: "",
+    role: "doctor" as "doctor" | "staff",
+    clinicName: "",
   })
+  const [showPassword, setShowPassword] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const router = useRouter()
+  const { client, isConfigured } = useSupabase()
 
-  async function onSubmit(values: z.infer<typeof formSchema>) {
-    setIsLoading(true)
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
     setError(null)
 
     try {
-      if (!isSupabaseConfigured()) {
-        throw new Error("Supabase is not configured. Please check your environment variables.")
+      if (!isConfigured) {
+        throw new Error("Application is not properly configured. Please contact support.")
       }
 
-      const supabase = createSupabaseClient()
+      if (!client) {
+        throw new Error("Unable to connect to authentication service.")
+      }
 
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email: values.email,
-        password: values.password,
+      // Validation
+      if (!formData.email.trim() || !formData.password || !formData.fullName.trim()) {
+        throw new Error("Please fill in all required fields.")
+      }
+
+      if (formData.password !== formData.confirmPassword) {
+        throw new Error("Passwords do not match.")
+      }
+
+      if (formData.password.length < 6) {
+        throw new Error("Password must be at least 6 characters long.")
+      }
+
+      const { data, error: authError } = await client.auth.signUp({
+        email: formData.email.trim(),
+        password: formData.password,
         options: {
           data: {
-            name: values.name,
+            full_name: formData.fullName.trim(),
+            phone: formData.phone.trim(),
+            role: formData.role,
           },
         },
       })
 
-      if (signUpError) {
-        throw new Error(signUpError.message || "Failed to register. Please try again.")
-      }
-
-      // Create a profile for the user
-      if (data.user) {
-        const { error: profileError } = await supabase.from("profiles").insert([
-          {
-            id: data.user.id,
-            name: values.name,
-            email: values.email,
-            role: "doctor",
-          },
-        ])
-
-        if (profileError) {
-          console.error("Error creating profile:", profileError)
+      if (authError) {
+        if (authError.message === "Supabase not configured") {
+          throw new Error("Application is not properly configured. Please contact support.")
         }
+        throw new Error(authError.message || "Registration failed. Please try again.")
       }
 
-      router.push("/dashboard")
-      router.refresh()
-    } catch (err: any) {
-      console.error("Registration error:", err)
-      setError(err.message || "An unexpected error occurred. Please try again.")
+      if (data.user) {
+        // Try to create clinic and profile, but don't fail if it doesn't work
+        try {
+          const { data: clinicData } = await client
+            .from("clinics")
+            .insert({
+              name: formData.clinicName.trim() || "My Clinic",
+              owner_id: data.user.id,
+            })
+            .select()
+            .single()
+
+          if (clinicData) {
+            await client.from("profiles").insert({
+              id: data.user.id,
+              full_name: formData.fullName.trim(),
+              phone: formData.phone.trim(),
+              role: formData.role,
+              clinic_id: clinicData.id,
+            })
+          }
+        } catch (profileError) {
+          console.error("Error creating profile:", profileError)
+          // Don't throw here, just log the error
+        }
+
+        router.push("/dashboard")
+        router.refresh()
+      }
+    } catch (error: any) {
+      console.error("Registration error:", error)
+      setError(error.message || "Registration failed. Please try again.")
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
   }
 
+  if (!isConfigured) {
+    return (
+      <div className="max-w-md mx-auto mt-8">
+        <Alert variant="destructive">
+          <AlertDescription>
+            The application is not properly configured. Please contact your administrator.
+          </AlertDescription>
+        </Alert>
+      </div>
+    )
+  }
+
   return (
-    <Card className="w-full max-w-md">
-      <CardHeader>
-        <CardTitle className="text-2xl">Register</CardTitle>
-        <CardDescription>Create a new account to get started</CardDescription>
-      </CardHeader>
-      <CardContent>
+    <div className="max-w-2xl mx-auto mt-8 p-6 bg-white dark:bg-gray-800 rounded-lg shadow-md">
+      <h2 className="text-2xl font-bold mb-6 text-center">Create Account</h2>
+
+      <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
-          <Alert variant="destructive" className="mb-4">
+          <Alert variant="destructive">
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Name</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Dr. John Doe" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="fullName">Full Name *</Label>
+            <Input
+              id="fullName"
+              type="text"
+              placeholder="Dr. John Doe"
+              value={formData.fullName}
+              onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+              required
+              disabled={loading}
             />
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Email</FormLabel>
-                  <FormControl>
-                    <Input placeholder="doctor@example.com" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="phone">Phone Number</Label>
+            <Input
+              id="phone"
+              type="tel"
+              placeholder="+1 (555) 123-4567"
+              value={formData.phone}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              disabled={loading}
             />
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Password</FormLabel>
-                  <FormControl>
-                    <Input type="password" placeholder="••••••••" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="email">Email *</Label>
+          <Input
+            id="email"
+            type="email"
+            placeholder="doctor@clinic.com"
+            value={formData.email}
+            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+            required
+            disabled={loading}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="role">Role</Label>
+          <Select
+            value={formData.role}
+            onValueChange={(value: "doctor" | "staff") => setFormData({ ...formData, role: value })}
+            disabled={loading}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select your role" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="doctor">Doctor</SelectItem>
+              <SelectItem value="staff">Staff</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="clinicName">Clinic Name</Label>
+          <Input
+            id="clinicName"
+            type="text"
+            placeholder="ABC Medical Center"
+            value={formData.clinicName}
+            onChange={(e) => setFormData({ ...formData, clinicName: e.target.value })}
+            disabled={loading}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="password">Password *</Label>
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                placeholder="Enter your password"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                required
+                disabled={loading}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                onClick={() => setShowPassword(!showPassword)}
+                disabled={loading}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="confirmPassword">Confirm Password *</Label>
+            <Input
+              id="confirmPassword"
+              type="password"
+              placeholder="Confirm your password"
+              value={formData.confirmPassword}
+              onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+              required
+              disabled={loading}
             />
-            <FormField
-              control={form.control}
-              name="confirmPassword"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Confirm Password</FormLabel>
-                  <FormControl>
-                    <Input type="password" placeholder="••••••••" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? "Creating account..." : "Create Account"}
-            </Button>
-          </form>
-        </Form>
-      </CardContent>
-      <CardFooter className="flex justify-center">
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          Already have an account?{" "}
-          <Button variant="link" className="p-0" onClick={() => router.push("/auth/login")}>
-            Login
-          </Button>
-        </p>
-      </CardFooter>
-    </Card>
+          </div>
+        </div>
+
+        <Button type="submit" className="w-full" disabled={loading}>
+          {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Create Account
+        </Button>
+
+        <div className="text-center text-sm">
+          <span className="text-gray-600 dark:text-gray-400">Already have an account? </span>
+          <Link href="/auth/login" className="text-blue-600 hover:text-blue-500 font-medium">
+            Sign in
+          </Link>
+        </div>
+      </form>
+    </div>
   )
 }
