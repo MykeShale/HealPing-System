@@ -1,122 +1,91 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { createSupabaseClient } from "@/lib/supabase"
-import type { DashboardStats } from "@/types"
 import { StatsCards } from "@/components/dashboard/stats-cards"
 import { UpcomingAppointments } from "@/components/dashboard/upcoming-appointments"
 import { RecentReminders } from "@/components/dashboard/recent-reminders"
-import { DashboardSkeleton } from "@/components/dashboard/dashboard-skeleton"
-import { useToast } from "@/hooks/use-toast"
+import { isSupabaseConfigured } from "@/lib/env"
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState<DashboardStats | null>(null)
-  const [loading, setLoading] = useState(true)
-  const { toast } = useToast()
-
-  const fetchDashboardData = async () => {
-    try {
-      setLoading(true)
-
-      const supabase = createSupabaseClient()
-
-      // Get current user
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser()
-
-      if (userError || !user) {
-        throw new Error("User not authenticated")
-      }
-
-      // Get user profile to get clinic_id
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("clinic_id")
-        .eq("id", user.id)
-        .single()
-
-      if (profileError || !profile?.clinic_id) {
-        throw new Error("Profile not found or no clinic associated")
-      }
-
-      // Fetch dashboard statistics with proper error handling
-      const today = new Date()
-      const tomorrow = new Date(today)
-      tomorrow.setDate(tomorrow.getDate() + 1)
-
-      const [patientsResult, appointmentsResult, followUpsResult] = await Promise.all([
-        supabase.from("patients").select("id", { count: "exact" }).eq("clinic_id", profile.clinic_id),
-
-        supabase
-          .from("appointments")
-          .select("id", { count: "exact" })
-          .eq("clinic_id", profile.clinic_id)
-          .gte("appointment_date", today.toISOString().split("T")[0])
-          .lt("appointment_date", tomorrow.toISOString().split("T")[0]),
-
-        supabase
-          .from("appointments")
-          .select("id", { count: "exact" })
-          .eq("clinic_id", profile.clinic_id)
-          .not("follow_up_date", "is", null)
-          .eq("status", "scheduled"),
-      ])
-
-      // Check for errors in the queries
-      if (patientsResult.error) {
-        console.error("Error fetching patients:", patientsResult.error)
-      }
-      if (appointmentsResult.error) {
-        console.error("Error fetching appointments:", appointmentsResult.error)
-      }
-      if (followUpsResult.error) {
-        console.error("Error fetching follow-ups:", followUpsResult.error)
-      }
-
-      const totalPatients = patientsResult.count || 0
-      const todayAppointments = appointmentsResult.count || 0
-      const pendingFollowUps = followUpsResult.count || 0
-
-      setStats({
-        totalPatients,
-        todayAppointments,
-        pendingFollowUps,
-        completionRate: 85, // This would be calculated based on actual data
-      })
-    } catch (error) {
-      console.error("Error fetching dashboard data:", error)
-      toast({
-        title: "Error",
-        description: "Failed to load dashboard data. Please refresh the page.",
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
+  const [isLoading, setIsLoading] = useState(true)
+  const [userData, setUserData] = useState<any>(null)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetchDashboardData()
+    const fetchUserData = async () => {
+      try {
+        if (!isSupabaseConfigured()) {
+          setError("Supabase is not configured. Please check your environment variables.")
+          setIsLoading(false)
+          return
+        }
+
+        const { createSupabaseClient } = await import("@/lib/supabase")
+        const supabase = createSupabaseClient()
+
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
+
+        if (!user) {
+          setError("User not authenticated")
+          setIsLoading(false)
+          return
+        }
+
+        const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single()
+
+        setUserData({ user, profile })
+      } catch (err) {
+        console.error("Error fetching user data:", err)
+        setError("Failed to load user data")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchUserData()
   }, [])
 
-  if (loading) {
-    return <DashboardSkeleton />
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="h-8 bg-gray-200 rounded w-1/4 animate-pulse"></div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="h-32 bg-gray-200 rounded animate-pulse"></div>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {[...Array(2)].map((_, i) => (
+            <div key={i} className="h-96 bg-gray-200 rounded animate-pulse"></div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-200px)]">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Error Loading Dashboard</h2>
+          <p className="text-gray-600 dark:text-gray-400">{error}</p>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="space-y-8 animate-fade-in">
+    <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
-        <p className="mt-2 text-gray-600 dark:text-gray-400">
-          Welcome back! Here's what's happening with your practice today.
-        </p>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+          Welcome back, {userData?.profile?.name || "Doctor"}
+        </h1>
+        <p className="text-gray-600 dark:text-gray-400">Here's an overview of your practice today</p>
       </div>
-
-      {stats && <StatsCards stats={stats} />}
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <StatsCards />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <UpcomingAppointments />
         <RecentReminders />
       </div>

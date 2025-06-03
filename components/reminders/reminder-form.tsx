@@ -1,207 +1,285 @@
 "use client"
 
-import type React from "react"
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { createSupabaseClient } from "@/lib/supabase"
-import type { Appointment } from "@/types"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { useForm } from "react-hook-form"
+import * as z from "zod"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { useToast } from "@/hooks/use-toast"
-import { ArrowLeft, Bell, Save, Loader2 } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { CalendarIcon } from "lucide-react"
+import { format } from "date-fns"
+import { Calendar } from "@/components/ui/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { cn } from "@/lib/utils"
+import { isSupabaseConfigured } from "@/lib/env"
+
+const formSchema = z.object({
+  patient_id: z.string().min(1, { message: "Please select a patient" }),
+  reminder_type: z.string().min(1, { message: "Please select a reminder type" }),
+  message: z.string().min(5, { message: "Message must be at least 5 characters" }),
+  scheduled_date: z.date({ required_error: "Please select a date" }),
+  status: z.string().default("pending"),
+})
 
 export function ReminderForm() {
-  const [formData, setFormData] = useState({
-    appointment_id: "",
-    reminder_type: "sms" as "sms" | "email" | "whatsapp" | "call",
-    scheduled_for: "",
-    message_content: "",
-  })
-  const [appointments, setAppointments] = useState<Appointment[]>([])
-  const [loading, setLoading] = useState(false)
-  const [dataLoading, setDataLoading] = useState(true)
   const router = useRouter()
-  const { toast } = useToast()
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [patients, setPatients] = useState<any[]>([])
 
-  useEffect(() => {
-    const fetchAppointments = async () => {
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      patient_id: "",
+      reminder_type: "",
+      message: "",
+      status: "pending",
+    },
+  })
+
+  useState(() => {
+    const fetchPatients = async () => {
       try {
+        if (!isSupabaseConfigured()) {
+          setError("Supabase is not configured. Please check your environment variables.")
+          return
+        }
+
+        const { createSupabaseClient } = await import("@/lib/supabase")
         const supabase = createSupabaseClient()
+
         const {
           data: { user },
         } = await supabase.auth.getUser()
-        if (!user) return
+
+        if (!user) {
+          setError("User not authenticated")
+          return
+        }
 
         const { data: profile } = await supabase.from("profiles").select("clinic_id").eq("id", user.id).single()
-        if (!profile?.clinic_id) return
 
-        const { data: appointments } = await supabase
-          .from("appointments")
-          .select(`
-            *,
-            patient:patients(full_name, phone, email)
-          `)
+        if (!profile?.clinic_id) {
+          setError("Clinic not found")
+          return
+        }
+
+        const { data, error: fetchError } = await supabase
+          .from("patients")
+          .select("id, name")
           .eq("clinic_id", profile.clinic_id)
-          .eq("status", "scheduled")
-          .order("appointment_date", { ascending: true })
+          .order("name")
 
-        setAppointments(appointments || [])
-      } catch (error) {
-        console.error("Error fetching appointments:", error)
-      } finally {
-        setDataLoading(false)
+        if (fetchError) {
+          throw new Error(fetchError.message)
+        }
+
+        setPatients(data || [])
+      } catch (err: any) {
+        console.error("Error fetching patients:", err)
+        setError(err.message || "Failed to load patients")
       }
     }
 
-    fetchAppointments()
+    fetchPatients()
   }, [])
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    setIsLoading(true)
+    setError(null)
 
     try {
+      if (!isSupabaseConfigured()) {
+        throw new Error("Supabase is not configured. Please check your environment variables.")
+      }
+
+      const { createSupabaseClient } = await import("@/lib/supabase")
       const supabase = createSupabaseClient()
 
-      const { error } = await supabase.from("reminders").insert({
-        appointment_id: formData.appointment_id,
-        reminder_type: formData.reminder_type,
-        scheduled_for: new Date(formData.scheduled_for).toISOString(),
-        message_content: formData.message_content,
-        status: "pending",
-      })
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
 
-      if (error) throw error
+      if (!user) {
+        throw new Error("User not authenticated")
+      }
 
-      toast({
-        title: "Success",
-        description: "Reminder scheduled successfully",
-      })
+      const { data: profile } = await supabase.from("profiles").select("clinic_id").eq("id", user.id).single()
+
+      if (!profile?.clinic_id) {
+        throw new Error("Clinic not found")
+      }
+
+      const { error: insertError } = await supabase.from("reminders").insert([
+        {
+          patient_id: values.patient_id,
+          reminder_type: values.reminder_type,
+          message: values.message,
+          scheduled_date: values.scheduled_date.toISOString(),
+          status: values.status,
+          clinic_id: profile.clinic_id,
+          created_by: user.id,
+        },
+      ])
+
+      if (insertError) {
+        throw new Error(insertError.message)
+      }
 
       router.push("/dashboard/reminders")
-    } catch (error: any) {
-      console.error("Error creating reminder:", error)
-      toast({
-        title: "Error",
-        description: "Failed to schedule reminder. Please try again.",
-        variant: "destructive",
-      })
+      router.refresh()
+    } catch (err: any) {
+      console.error("Error creating reminder:", err)
+      setError(err.message || "Failed to create reminder")
     } finally {
-      setLoading(false)
+      setIsLoading(false)
     }
   }
 
-  if (dataLoading) {
-    return (
-      <div className="space-y-6">
-        <div className="h-8 bg-gray-200 rounded w-1/4 animate-pulse"></div>
-        <div className="h-64 bg-gray-200 rounded animate-pulse"></div>
-      </div>
-    )
-  }
-
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center space-x-4">
-        <Button variant="ghost" size="sm" onClick={() => router.back()}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back
+    <Card className="w-full max-w-2xl mx-auto">
+      <CardHeader>
+        <CardTitle>Create Reminder</CardTitle>
+        <CardDescription>Schedule a new reminder for a patient</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {error && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="patient_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Patient</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a patient" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {patients.map((patient) => (
+                        <SelectItem key={patient.id} value={patient.id}>
+                          {patient.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="reminder_type"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Reminder Type</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a reminder type" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="sms">SMS</SelectItem>
+                      <SelectItem value="email">Email</SelectItem>
+                      <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                      <SelectItem value="call">Call</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="message"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Message</FormLabel>
+                  <FormControl>
+                    <Textarea placeholder="Enter the reminder message" className="min-h-32" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="scheduled_date"
+              render={({ field }) => (
+                <FormItem className="flex flex-col">
+                  <FormLabel>Scheduled Date</FormLabel>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <FormControl>
+                        <Button
+                          variant={"outline"}
+                          className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}
+                        >
+                          {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                        </Button>
+                      </FormControl>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={field.value}
+                        onSelect={field.onChange}
+                        disabled={(date) => date < new Date()}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="status"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Status</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a status" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="sent">Sent</SelectItem>
+                      <SelectItem value="cancelled">Cancelled</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </form>
+        </Form>
+      </CardContent>
+      <CardFooter className="flex justify-between">
+        <Button variant="outline" onClick={() => router.back()}>
+          Cancel
         </Button>
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Create Reminder</h1>
-          <p className="text-gray-600 dark:text-gray-400">Schedule a new reminder for a patient</p>
-        </div>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Bell className="h-5 w-5 mr-2" />
-              Reminder Details
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="appointment_id">Appointment *</Label>
-                <Select
-                  value={formData.appointment_id}
-                  onValueChange={(value) => setFormData({ ...formData, appointment_id: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select an appointment" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {appointments.map((appointment) => (
-                      <SelectItem key={appointment.id} value={appointment.id}>
-                        {appointment.patient?.full_name} - {new Date(appointment.appointment_date).toLocaleDateString()}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="reminder_type">Reminder Type *</Label>
-                <Select
-                  value={formData.reminder_type}
-                  onValueChange={(value: "sms" | "email" | "whatsapp" | "call") =>
-                    setFormData({ ...formData, reminder_type: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select reminder type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="sms">SMS</SelectItem>
-                    <SelectItem value="email">Email</SelectItem>
-                    <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                    <SelectItem value="call">Phone Call</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="scheduled_for">Schedule For *</Label>
-              <Input
-                id="scheduled_for"
-                type="datetime-local"
-                value={formData.scheduled_for}
-                onChange={(e) => setFormData({ ...formData, scheduled_for: e.target.value })}
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="message_content">Message Content</Label>
-              <Textarea
-                id="message_content"
-                placeholder="Enter the reminder message..."
-                value={formData.message_content}
-                onChange={(e) => setFormData({ ...formData, message_content: e.target.value })}
-                rows={4}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="flex justify-end space-x-4">
-          <Button type="button" variant="outline" onClick={() => router.back()}>
-            Cancel
-          </Button>
-          <Button type="submit" disabled={loading}>
-            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            <Save className="mr-2 h-4 w-4" />
-            Schedule Reminder
-          </Button>
-        </div>
-      </form>
-    </div>
+        <Button onClick={form.handleSubmit(onSubmit)} disabled={isLoading}>
+          {isLoading ? "Creating..." : "Create Reminder"}
+        </Button>
+      </CardFooter>
+    </Card>
   )
 }
